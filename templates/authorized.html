@@ -1,0 +1,145 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Authorized Users</title>
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      background-color: #f8f9fa;
+      color: #333;
+      margin: 0;
+      padding: 20px;
+    }
+
+    .container {
+      max-width: 1000px;
+      margin: auto;
+      padding: 20px;
+    }
+
+    /* Profile Card */
+    .profile-card {
+      display: flex;
+      align-items: center;
+      background: white;
+      padding: 20px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+      margin-bottom: 20px;
+    }
+
+    .profile-details {
+      margin-left: 20px;
+      flex: 1;
+    }
+
+    .profile-details h2 {
+      margin: 0 0 10px;
+      color: #2c3e50;
+    }
+
+    .profile-details p {
+      margin: 5px 0;
+    }
+
+    /* User List Table */
+    .user-list {
+      background: white;
+      padding: 15px;
+      border-radius: 8px;
+      box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
+    }
+
+    .user-list h2 {
+      margin-bottom: 10px;
+      color: #2c3e50;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 10px;
+    }
+
+    th, td {
+      padding: 12px;
+      border-bottom: 1px solid #ddd;
+      text-align: left;
+    }
+
+    th {
+      background-color: #007bff;
+      color: white;
+    }
+
+    tr:nth-child(even) {
+      background-color: #f2f2f2;
+    }
+
+    tr:hover {
+      background-color: #e9ecef;
+    }
+
+    /* Responsive Design */
+    @media (max-width: 768px) {
+      .profile-card {
+        flex-direction: column;
+        text-align: center;
+      }
+
+      .profile-details {
+        margin-left: 0;
+        margin-top: 15px;
+      }
+
+      table {
+        font-size: 14px;
+      }
+
+      th, td {
+        padding: 8px;
+      }
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+
+    <!-- Current User Profile -->
+    <div class="profile-card">
+      <img src="https://placehold.co/80x80/webp" alt="User Avatar" style="border-radius: 50%;">
+      <div class="profile-details">
+        <h2>{{ user_data.first_name }} {{ user_data.last_name }}</h2>
+        <p><strong>Username:</strong> {{ user_data.username }}</p>
+        <p><strong>Email:</strong> {{ user_data.email }}</p>
+        <p><strong>Bio:</strong> {{ user_data.bio }}</p>
+        <p><strong>Joined:</strong> {{ user_data.created_at }}</p>
+      </div>
+    </div>
+
+    <!-- Public User List -->
+    <div class="user-list">
+      <h2>Public Authorized Users List</h2>
+      <table>
+        <thead>
+          <tr>
+            <th>#</th>
+            <th>Username</th>
+          </tr>
+        </thead>
+        <tbody>
+          {% for user in users %}
+          <tr>
+            <td>{{ loop.index }}</td>
+            <td>{{ user }}</td>
+          </tr>
+          {% endfor %}
+        </tbody>
+      </table>
+    </div>
+
+  </div>
+</body>
+</html>

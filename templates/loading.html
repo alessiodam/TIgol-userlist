@@ -1,0 +1,55 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Processing Authorization...</title>
+  <script src="https://cdn.socket.io/4.8.1/socket.io.min.js" integrity="sha384-mkQ3/7FUtcGyoppY6bz/PORYoGqOl7/aSUMn2ymDOJcapfS6PHqxhRTMh1RR0Q6+" crossorigin="anonymous"></script>
+  <style>
+    body { font-family: Arial, sans-serif; text-align: center; padding-top: 50px; }
+    #progress { font-size: 1.2em; margin-bottom: 20px; }
+    #spinner { font-size: 2em; }
+  </style>
+</head>
+<body>
+  <div id="progress">Initializing...</div>
+  <div id="spinner">&#9696;</div>
+
+  <script>
+    var socket = io();
+    
+    socket.on("connect", function() {
+      console.log("Socket connected!");
+      socket.emit("start_auth");
+    });
+  
+    socket.on("progress", function(data) {
+      console.log("Progress:", data.msg);
+      document.getElementById("progress").innerText = data.msg;
+    });
+  
+    socket.on("error", function(data) {
+      console.log("Error:", data.msg);
+      document.getElementById("progress").innerText = data.msg;
+    });
+  
+    socket.on("done", function(data) {
+      console.log("Done! Redirecting to:", data.redirect);
+      document.getElementById("progress").innerText = "Processing complete!";
+      setTimeout(function() {
+        window.location.href = data.redirect;
+      }, 1000);
+    });
+  </script>
+  <style>
+    @keyframes spin {
+      0% { transform: rotate(0deg); }
+      100% { transform: rotate(360deg); }
+    }
+    #spinner {
+      font-size: 2em;
+      animation: spin 1s linear infinite;
+      display: inline-block;
+    }
+  </style>
+</body>
+</html>
