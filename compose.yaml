@@ -1,8 +1,13 @@
+name: tigol-userlist
+
 services:
   postgres:
     image: postgres:16
     container_name: tigol-userlist-postgres
     restart: unless-stopped
+    command: postgres -p ${POSTGRES_PORT}
+    ports:
+      - "${POSTGRES_PORT}:${POSTGRES_PORT}"
     environment:
       POSTGRES_USER: ${POSTGRES_USER}
       POSTGRES_PASSWORD: ${POSTGRES_PASSWORD}
@@ -17,6 +22,7 @@ services:
     networks:
       tigol-userlist-network:
         ipv4_address: 172.21.0.2
+    profiles: ['database', 'all']
 
   server:
     container_name: tigol-userlist-server
@@ -33,6 +39,7 @@ services:
     networks:
       tigol-userlist-network:
         ipv4_address: 172.21.0.3
+    profiles: ['server', 'all']
 
 networks:
   tigol-userlist-network:

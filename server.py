@@ -3,19 +3,17 @@ import uuid
 import psycopg2
 from datetime import timedelta
 import dotenv
-import requests
 from flask import Flask, request, redirect, render_template, g, url_for, make_response
 from flask_socketio import SocketIO, emit
+from tigol import TIgolApiClient
 
-# Load environment variables from .env file
 dotenv.load_dotenv(".env")
 
-CLIENT_ID = os.environ.get("TIGOL_CLIENT_ID")
-CLIENT_SECRET = os.environ.get("TIGOL_CLIENT_SECRET")
-REDIRECT_URI = os.environ.get("TIGOL_REDIRECT_URI")
-DATABASE_URL = os.getenv("DB_DSN")
-
-API_BASE_URL = "https://api.tigol.net"
+DATABASE_URL = os.environ.get("DB_DSN") or (
+    f"postgresql://{os.environ.get('POSTGRES_USER', 'userlist')}:{os.environ.get('POSTGRES_PASSWORD', 'userlist')}"
+    f"@{os.environ.get('POSTGRES_HOST', 'localhost')}:{os.environ.get('POSTGRES_PORT', '5434')}/"
+    f"{os.environ.get('POSTGRES_DB', 'userlist')}"
+)
 
 app = Flask(__name__)
 app.secret_key = os.environ.get("FLASK_SECRET_KEY", "super-secret-key")
@@ -23,34 +21,33 @@ app.permanent_session_lifetime = timedelta(days=2)
 
 socketio = SocketIO(app, async_mode="threading")
 
+client = TIgolApiClient(
+    os.environ.get("TIGOL_CLIENT_ID"),
+    os.environ.get("TIGOL_CLIENT_SECRET"),
+)
+
 USER_SESSIONS = {}
 
-def get_custom_session():
-    session_id = request.cookies.get("session_id")
-    if session_id is None or session_id not in USER_SESSIONS:
-        session_id = str(uuid.uuid4())
-        USER_SESSIONS[session_id] = {}
-    return session_id, USER_SESSIONS[session_id]
+def retrieve_session():
+    session_id = request.cookies.get("session_id") or str(uuid.uuid4())
+    return session_id, USER_SESSIONS.setdefault(session_id, {})
 
-def update_custom_session(session_id, data):
+def store_session(session_id, data):
     USER_SESSIONS[session_id] = data
 
-# Database helper functions
-def get_db():
+def connect_db():
     if "db" not in g:
         g.db = psycopg2.connect(DATABASE_URL)
         g.db.autocommit = True
     return g.db
 
 @app.teardown_appcontext
-def close_db(exception):
-    db = g.pop("db", None)
-    if db is not None:
+def disconnect_db(_):
+    if db := g.pop("db", None):
         db.close()
 
-def init_db():
-    db = get_db()
-    with db.cursor() as cur:
+def initialize_database():
+    with connect_db().cursor() as cur:
         cur.execute(
             """
             CREATE TABLE IF NOT EXISTS authorized_users (
@@ -61,37 +58,22 @@ def init_db():
         )
     print("Database initialized.")
 
-def get_user_data_with_token(token):
-    user_response = requests.get(
-        f"{API_BASE_URL}/auth/v1/user/me",
-        headers={"Authorization": f"Bearer {token}"}
-    )
-    user_response.raise_for_status()
-    return user_response.json()
-
 @app.route("/")
 def index():
-    oauth_url = (
-        f"https://www.tigol.net/oauth/authorize"
-        f"?client_id={CLIENT_ID}"
-        f"&redirect_uri={REDIRECT_URI}"
-        f"&scope=user:read"
-    )
-    return redirect(oauth_url)
+    return redirect(client.get_authorization_url(redirect_uri=os.environ.get("TIGOL_REDIRECT_URI")))
 
 @app.route("/authorized")
 def authorized():
-    code = request.args.get("code")
-    if not code:
+    if not (code := request.args.get("code")):
         return "Missing authorization code", 400
 
-    session_id, custom_session = get_custom_session()
-    custom_session["auth_code"] = code
-    update_custom_session(session_id, custom_session)
+    session_id, session_data = retrieve_session()
+    session_data["auth_code"] = code
+    store_session(session_id, session_data)
 
-    resp = make_response(redirect(url_for("loading")))
-    resp.set_cookie("session_id", session_id)
-    return resp
+    response = make_response(redirect(url_for("loading")))
+    response.set_cookie("session_id", session_id)
+    return response
 
 @app.route("/loading")
 def loading():
@@ -99,58 +81,48 @@ def loading():
 
 @app.route("/display")
 def display():
-    session_id, custom_session = get_custom_session()
-    user_data = custom_session.get("user_data")
-    if not user_data:
+    _, session_data = retrieve_session()
+    if not (user_data := session_data.get("user_data")):
         return render_template("error.html", error_message="Session expired. Log in again.")
-    
+
     username = user_data.get("username")
     if username:
-        db = get_db()
         try:
-            with db.cursor() as cur:
+            with connect_db().cursor() as cur:
                 cur.execute("INSERT INTO authorized_users (username) VALUES (%s) ON CONFLICT DO NOTHING", (username,))
         except psycopg2.Error as e:
             print("Database error:", e)
 
-    with get_db().cursor() as cur:
+    with connect_db().cursor() as cur:
         cur.execute("SELECT username FROM authorized_users ORDER BY username ASC")
         users = [row[0] for row in cur.fetchall()]
-    
+
     return render_template("authorized.html", user_data=user_data, users=users)
 
 @socketio.on("start_auth")
 def handle_start_auth():
     session_id = request.cookies.get("session_id")
     if not session_id or session_id not in USER_SESSIONS:
-        emit("error", {"msg": "No valid session found."})
-        return
+        return emit("error", {"msg": "No valid session found."})
 
-    custom_session = USER_SESSIONS[session_id]
+    session_data = USER_SESSIONS[session_id]
 
-    if custom_session.get("token") and custom_session.get("user_data"):
+    if "token" in session_data and "user_data" in session_data:
         emit("progress", {"msg": "Using cached token and user data."})
-        emit("done", {"redirect": url_for("display")})
-        return
+        return emit("done", {"redirect": url_for("display")})
 
-    code = custom_session.get("auth_code")
-    if not code:
-        emit("error", {"msg": "No authorization code found in session."})
-        return
+    if not (code := session_data.get("auth_code")):
+        return emit("error", {"msg": "No authorization code found in session."})
 
     try:
         emit("progress", {"msg": "Exchanging code for token..."})
-        auth_data = {"client_id": CLIENT_ID, "client_secret": CLIENT_SECRET, "code": code}
-        response = requests.post(f"{API_BASE_URL}/auth/oidc/token", json=auth_data)
-        response.raise_for_status()
+        token_obj = client.exchange_code_for_token(code=code)
 
-        token = response.json()["access_token"]
         emit("progress", {"msg": "Retrieving user data..."})
-        user_data = get_user_data_with_token(token)
+        user_obj = client.get_user(token_obj)
 
-        custom_session["token"] = token
-        custom_session["user_data"] = user_data
-        update_custom_session(session_id, custom_session)
+        session_data.update({"token": token_obj, "user_data": user_obj.__dict__})
+        store_session(session_id, session_data)
 
         emit("progress", {"msg": "Done!"})
         emit("done", {"redirect": url_for("display")})
@@ -159,11 +131,11 @@ def handle_start_auth():
 
 def get_app() -> Flask:
     with app.app_context():
-        init_db()
+        initialize_database()
     return app
 
 if __name__ == "__main__":
     with app.app_context():
-        init_db()
+        initialize_database()
     print("Starting Flask-SocketIO server...")
     socketio.run(app, debug=True)
