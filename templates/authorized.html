@@ -125,14 +125,12 @@
       <table>
         <thead>
           <tr>
-            <th>#</th>
             <th>Username</th>
           </tr>
         </thead>
         <tbody>
           {% for user in users %}
           <tr>
-            <td>{{ loop.index }}</td>
             <td>{{ user }}</td>
           </tr>
           {% endfor %}
