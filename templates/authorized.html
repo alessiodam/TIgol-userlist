@@ -1,9 +1,23 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Authorized Users</title>
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/crypto-js/4.1.1/crypto-js.min.js"></script>
+  <script>
+    function md5(string) {
+      return CryptoJS.MD5(string).toString();
+    }
+
+    window.onload = function () {
+      const userEmail = "{{ user_data.email }}";
+      const avatarImg = document.getElementById("profile-avatar");
+      const emailHash = md5(userEmail.trim().toLowerCase());
+      avatarImg.src = `https://www.gravatar.com/avatar/${emailHash}?s=80`;
+    };
+  </script>
   <style>
     body {
       font-family: Arial, sans-serif;
@@ -27,7 +41,11 @@
       padding: 20px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
-      margin-bottom: 20px;
+      margin-bottom: 30px;
+    }
+
+    .profile-card img {
+      border-radius: 50%;
     }
 
     .profile-details {
@@ -44,42 +62,53 @@
       margin: 5px 0;
     }
 
-    /* User List Table */
+    /* Public User List */
     .user-list {
       background: white;
-      padding: 15px;
+      padding: 20px;
       border-radius: 8px;
       box-shadow: 0 2px 8px rgba(0, 0, 0, 0.1);
     }
 
     .user-list h2 {
-      margin-bottom: 10px;
+      margin-bottom: 20px;
       color: #2c3e50;
+      text-align: center;
     }
 
-    table {
-      width: 100%;
-      border-collapse: collapse;
-      margin-top: 10px;
+    .users-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 20px;
     }
 
-    th, td {
-      padding: 12px;
-      border-bottom: 1px solid #ddd;
-      text-align: left;
+    .user-card {
+      background: #fafafa;
+      border-radius: 8px;
+      text-align: center;
+      padding: 15px;
+      box-shadow: 0 2px 6px rgba(0, 0, 0, 0.1);
+      transition: transform 0.2s, box-shadow 0.2s;
     }
 
-    th {
-      background-color: #007bff;
-      color: white;
+    .user-card:hover {
+      transform: translateY(-5px);
+      box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
     }
 
-    tr:nth-child(even) {
-      background-color: #f2f2f2;
+    .user-card img {
+      border-radius: 50%;
+      width: 80px;
+      height: 80px;
+      margin-bottom: 10px;
+      object-fit: cover;
     }
 
-    tr:hover {
-      background-color: #e9ecef;
+    .user-card .username {
+      font-size: 1.1em;
+      color: #2c3e50;
+      margin-bottom: 5px;
+      font-weight: bold;
     }
 
     /* Responsive Design */
@@ -93,23 +122,15 @@
         margin-left: 0;
         margin-top: 15px;
       }
-
-      table {
-        font-size: 14px;
-      }
-
-      th, td {
-        padding: 8px;
-      }
     }
   </style>
 </head>
+
 <body>
   <div class="container">
-
     <!-- Current User Profile -->
     <div class="profile-card">
-      <img src="https://placehold.co/80x80/webp" alt="User Avatar" style="border-radius: 50%;">
+      <img id="profile-avatar" src="" alt="User Avatar" width="80" height="80" />
       <div class="profile-details">
         <h2>{{ user_data.first_name }} {{ user_data.last_name }}</h2>
         <p><strong>Username:</strong> {{ user_data.username }}</p>
@@ -122,22 +143,16 @@
     <!-- Public User List -->
     <div class="user-list">
       <h2>Public Authorized Users List</h2>
-      <table>
-        <thead>
-          <tr>
-            <th>Username</th>
-          </tr>
-        </thead>
-        <tbody>
-          {% for user in users %}
-          <tr>
-            <td>{{ user }}</td>
-          </tr>
-          {% endfor %}
-        </tbody>
-      </table>
+      <div class="users-grid">
+        {% for user in users %}
+        <div class="user-card">
+          <img src="https://www.gravatar.com/avatar/{{ user.email_md5 }}?s=80&d=identicon" alt="User Avatar" />
+          <div class="username">{{ user.username }}</div>
+        </div>
+        {% endfor %}
+      </div>
     </div>
-
   </div>
 </body>
+
 </html>

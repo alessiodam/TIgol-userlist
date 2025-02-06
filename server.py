@@ -6,6 +6,7 @@ import dotenv
 from flask import Flask, request, redirect, render_template, g, url_for, make_response
 from flask_socketio import SocketIO, emit
 from tigol import TIgolApiClient
+import hashlib
 
 dotenv.load_dotenv(".env")
 
@@ -52,7 +53,8 @@ def initialize_database():
             """
             CREATE TABLE IF NOT EXISTS authorized_users (
                 id SERIAL PRIMARY KEY,
-                username TEXT UNIQUE NOT NULL
+                username TEXT UNIQUE NOT NULL,
+                email_md5 TEXT UNIQUE NOT NULL
             )
             """
         )
@@ -60,7 +62,9 @@ def initialize_database():
 
 @app.route("/")
 def index():
-    return redirect(client.get_authorization_url(redirect_uri=os.environ.get("TIGOL_REDIRECT_URI")))
+    if request.args.get("authorize") == "1":
+        return redirect(client.get_authorization_url(redirect_uri=os.environ.get("TIGOL_REDIRECT_URI"), scopes=["user:read"]))
+    return render_template("root.html")
 
 @app.route("/authorized")
 def authorized():
@@ -86,16 +90,17 @@ def display():
         return render_template("error.html", error_message="Session expired. Log in again.")
 
     username = user_data.get("username")
+    email_md5 = hashlib.md5(user_data.get("email").encode()).hexdigest()
     if username:
         try:
             with connect_db().cursor() as cur:
-                cur.execute("INSERT INTO authorized_users (username) VALUES (%s) ON CONFLICT DO NOTHING", (username,))
+                cur.execute("INSERT INTO authorized_users (username, email_md5) VALUES (%s, %s) ON CONFLICT DO NOTHING", (username, email_md5))
         except psycopg2.Error as e:
             print("Database error:", e)
 
     with connect_db().cursor() as cur:
-        cur.execute("SELECT username FROM authorized_users ORDER BY username ASC")
-        users = [row[0] for row in cur.fetchall()]
+        cur.execute("SELECT username, email_md5 FROM authorized_users ORDER BY username ASC")
+        users = [{"username": row[0], "email_md5": row[1]} for row in cur.fetchall()]
 
     return render_template("authorized.html", user_data=user_data, users=users)
 
